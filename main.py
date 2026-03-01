@@ -1,9 +1,17 @@
+import sys
+from pathlib import Path
+
 from fastapi import FastAPI
 
-from .database import Base, engine
-from .routers import user as user_router
-from .routers import messages as messages_router
-from .routers import websoket_router
+# Comentario: garante import absoluto quando executar como script.
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
+from MeuChat.database import Base, engine
+from MeuChat.routers import user as user_router
+from MeuChat.routers import messages as messages_router
+from MeuChat.routers import websoket_router
 
 app = FastAPI(title="MeuChat")
 

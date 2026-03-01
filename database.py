@@ -5,6 +5,8 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Comentario: usa DATABASE_URL do ambiente (PostgreSQL recomendado).
 DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///./meuchat.db"
 
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
