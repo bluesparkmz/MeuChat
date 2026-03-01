@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 
-from MeuChat.database import Base, engine
-from MeuChat.routers import user as user_router
-from MeuChat.routers import messages as messages_router
-from MeuChat.routers import websoket_router
+from .database import Base, engine
+from .routers import user as user_router
+from .routers import messages as messages_router
+from .routers import websoket_router
 
 app = FastAPI(title="MeuChat")
 
