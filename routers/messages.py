@@ -146,6 +146,9 @@ def mark_chat_read(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    if chat_type == "dm":
+        chat_type = "direct"
+
     if chat_type not in {"direct", "group"}:
         raise HTTPException(status_code=400, detail="chat_type invalido")
 

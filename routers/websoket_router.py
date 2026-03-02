@@ -39,6 +39,7 @@ async def _heartbeat_loop(ws: WebSocket, interval: int = 30):
         await asyncio.sleep(interval)
 
 
+@router.websocket("")
 @router.websocket("/chat")
 async def chat_socket(websocket: WebSocket):
     db: Session = SessionLocal()
