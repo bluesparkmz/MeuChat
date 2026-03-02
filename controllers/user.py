@@ -42,3 +42,10 @@ def update_user(db: Session, user: models.User, user_in: schemmas.UserUpdate) ->
 def delete_user(db: Session, user: models.User) -> None:
     db.delete(user)
     db.commit()
+
+
+def set_password(db: Session, user: models.User, new_password: str) -> models.User:
+    user.password_hash = get_password_hash(new_password)
+    db.commit()
+    db.refresh(user)
+    return user

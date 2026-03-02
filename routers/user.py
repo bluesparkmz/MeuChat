@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
@@ -9,6 +10,7 @@ import schemmas
 import models
 from auth import create_access_token, get_current_user
 from controllers import user as user_controller
+from controllers import whatsapp as whatsapp_controller
 from database import get_db
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -133,3 +135,58 @@ def delete_me(
 ):
     user_controller.delete_user(db, current_user)
     return None
+
+
+@router.get("/friends", response_model=list[schemmas.UserOut])
+def list_friends(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    # Comentario: lista simples de usuarios (exceto o atual).
+    users = db.query(models.User).filter(models.User.id != current_user.id).all()
+    return users
+
+
+@router.post("/password/otp/request")
+def request_password_reset(payload: schemmas.OTPRequest, db: Session = Depends(get_db)):
+    # Comentario: envia OTP via WhatsApp para o numero cadastrado.
+    user = db.query(models.User).filter(models.User.phone == payload.phone).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario nao encontrado")
+
+    if not user.phone:
+        raise HTTPException(status_code=400, detail="Usuario sem telefone cadastrado")
+
+    otp = whatsapp_controller.create_password_reset_otp(db, user)
+    response = whatsapp_controller.send_password_reset_otp(user.phone, otp.code)
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Falha ao enviar OTP")
+    return {"detail": "OTP enviado"}
+
+
+@router.post("/password/otp/verify")
+def verify_password_reset(payload: schemmas.OTPVerify, db: Session = Depends(get_db)):
+    # Comentario: valida OTP e atualiza senha.
+    otp = (
+        db.query(models.PasswordResetOTP)
+        .filter(
+            models.PasswordResetOTP.phone == payload.phone,
+            models.PasswordResetOTP.code == payload.code,
+            models.PasswordResetOTP.used.is_(False),
+        )
+        .order_by(models.PasswordResetOTP.created_at.desc())
+        .first()
+    )
+    if not otp:
+        raise HTTPException(status_code=400, detail="OTP invalido")
+    if otp.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="OTP expirado")
+
+    user = db.query(models.User).filter(models.User.id == otp.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario nao encontrado")
+
+    user_controller.set_password(db, user, payload.new_password)
+    otp.used = True
+    db.commit()
+    return {"detail": "Senha atualizada"}

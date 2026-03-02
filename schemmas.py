@@ -116,3 +116,13 @@ class ChatSummary(BaseModel):
 class ChatReadRequest(BaseModel):
     chat_type: str
     chat_id: int
+
+
+class OTPRequest(BaseModel):
+    phone: str
+
+
+class OTPVerify(BaseModel):
+    phone: str
+    code: str
+    new_password: str = Field(min_length=4)
