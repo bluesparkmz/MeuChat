@@ -226,6 +226,21 @@ def delete_message(
     return None
 
 
+@router.post("/{message_id}/read")
+def mark_message_read(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    message = db.query(models.Message).filter(models.Message.id == message_id).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Mensagem nao encontrada")
+    if message.receiver_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Apenas o receptor pode marcar como lida")
+    created = message_controller.mark_message_read(db, message_id, current_user.id)
+    return {"marked": created}
+
+
 @router.get("/group/{group_id}", response_model=list[schemmas.MessageOut])
 def get_group_messages(
     group_id: int,

@@ -123,3 +123,16 @@ def mark_messages_read(db: Session, message_ids: list[int], user_id: int) -> int
     if created:
         db.commit()
     return created
+
+
+def mark_message_read(db: Session, message_id: int, user_id: int) -> bool:
+    exists = (
+        db.query(models.MessageRead)
+        .filter(models.MessageRead.message_id == message_id, models.MessageRead.user_id == user_id)
+        .first()
+    )
+    if exists:
+        return False
+    db.add(models.MessageRead(message_id=message_id, user_id=user_id))
+    db.commit()
+    return True
