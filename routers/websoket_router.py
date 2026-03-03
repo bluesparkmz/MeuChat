@@ -119,6 +119,8 @@ async def chat_socket(websocket: WebSocket):
                     content=payload.content or "",
                     receiver_id=payload.receiver_id,
                     group_id=payload.group_id,
+                    media_url=payload.media_url,
+                    media_type=payload.media_type,
                 )
                 message = message_controller.create_message(db, user.id, message_in)
                 response = {
@@ -129,6 +131,8 @@ async def chat_socket(websocket: WebSocket):
                         "sender_id": message.sender_id,
                         "receiver_id": message.receiver_id,
                         "group_id": message.group_id,
+                        "media_url": message.media_url,
+                        "media_type": message.media_type,
                         "created_at": message.created_at.isoformat(),
                     },
                 }

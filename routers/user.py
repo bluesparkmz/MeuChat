@@ -1,6 +1,4 @@
-from pathlib import Path
 from datetime import datetime
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -11,11 +9,10 @@ import models
 from auth import create_access_token, get_current_user
 from controllers import user as user_controller
 from controllers import whatsapp as whatsapp_controller
+from controllers.storage_manager import storage_manager, AVATARS_FOLDER
 from database import get_db
 
 router = APIRouter(prefix="/users", tags=["users"])
-
-UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
 
 
 @router.post("/register", response_model=schemmas.UserOut, status_code=status.HTTP_201_CREATED)
@@ -41,15 +38,11 @@ async def register(
 
     avatar_path: str | None = None
     if avatar:
-        if not avatar.content_type or not avatar.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="Avatar deve ser uma imagem")
-        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        file_ext = Path(avatar.filename).suffix.lower() if avatar.filename else ""
-        filename = f"{username}_{uuid4().hex}{file_ext}"
-        file_path = UPLOADS_DIR / filename
-        content = await avatar.read()
-        file_path.write_bytes(content)
-        avatar_path = f"uploads/{filename}"
+        avatar_path = await storage_manager.upload_file(
+            avatar,
+            AVATARS_FOLDER,
+            allowed_mime_prefixes=("image/",),
+        )
 
     parsed_birth_date = None
     if birth_date:
@@ -111,18 +104,11 @@ async def upload_avatar(
     current_user: models.User = Depends(get_current_user),
 ):
     # Comentario: valida tipo do arquivo e salva na pasta uploads.
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Arquivo deve ser uma imagem")
-
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    file_ext = Path(file.filename).suffix.lower() if file.filename else ""
-    filename = f"{current_user.id}_{uuid4().hex}{file_ext}"
-    file_path = UPLOADS_DIR / filename
-
-    content = await file.read()
-    file_path.write_bytes(content)
-
-    current_user.avatar = f"uploads/{filename}"
+    current_user.avatar = await storage_manager.upload_file(
+        file,
+        AVATARS_FOLDER,
+        allowed_mime_prefixes=("image/",),
+    )
     db.commit()
     db.refresh(current_user)
     return current_user

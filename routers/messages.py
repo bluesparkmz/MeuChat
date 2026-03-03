@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -6,20 +6,89 @@ import schemmas
 import models
 from auth import get_current_user
 from controllers import message as message_controller
+from controllers.conection_manager import global_connection_manager
+from controllers.storage_manager import storage_manager, MESSAGES_FOLDER
 from database import get_db
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
 
+def _serialize_message(message: models.Message) -> dict:
+    return {
+        "id": message.id,
+        "content": message.content,
+        "sender_id": message.sender_id,
+        "receiver_id": message.receiver_id,
+        "group_id": message.group_id,
+        "media_url": message.media_url,
+        "media_type": message.media_type,
+        "created_at": message.created_at.isoformat(),
+    }
+
+
+async def _broadcast_message(message: models.Message) -> None:
+    response = {"type": "message", "message": _serialize_message(message)}
+    if message.group_id:
+        await global_connection_manager.send_group(message.group_id, response)
+    elif message.receiver_id:
+        await global_connection_manager.send_personal(message.receiver_id, response)
+        await global_connection_manager.send_personal(message.sender_id, response)
+
+
 @router.post("/", response_model=schemmas.MessageOut, status_code=status.HTTP_201_CREATED)
-def send_message(
+async def send_message(
     message_in: schemmas.MessageCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     if not message_in.receiver_id and not message_in.group_id:
         raise HTTPException(status_code=400, detail="receiver_id ou group_id e obrigatorio")
-    return message_controller.create_message(db, current_user.id, message_in)
+    if not (message_in.content or "").strip() and not message_in.media_url:
+        raise HTTPException(status_code=400, detail="Mensagem vazia")
+
+    message = message_controller.create_message(db, current_user.id, message_in)
+    await _broadcast_message(message)
+    return message
+
+
+@router.post("/upload", response_model=schemmas.MessageOut, status_code=status.HTTP_201_CREATED)
+async def upload_message_media(
+    file: UploadFile = File(...),
+    receiver_id: int | None = Form(None),
+    group_id: int | None = Form(None),
+    content: str | None = Form(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not receiver_id and not group_id:
+        raise HTTPException(status_code=400, detail="receiver_id ou group_id e obrigatorio")
+
+    if not file.content_type:
+        raise HTTPException(status_code=400, detail="Tipo de arquivo invalido")
+
+    if file.content_type.startswith("image/"):
+        media_type = "image"
+    elif file.content_type.startswith("audio/"):
+        media_type = "audio"
+    else:
+        raise HTTPException(status_code=400, detail="Apenas imagem e audio sao suportados")
+
+    media_url = await storage_manager.upload_file(
+        file,
+        MESSAGES_FOLDER,
+        allowed_mime_prefixes=("image/", "audio/"),
+    )
+
+    message_in = schemmas.MessageCreate(
+        content=(content or "").strip(),
+        receiver_id=receiver_id,
+        group_id=group_id,
+        media_url=media_url,
+        media_type=media_type,
+    )
+    message = message_controller.create_message(db, current_user.id, message_in)
+    await _broadcast_message(message)
+    return message
 
 
 @router.get("/conversation/{other_user_id}", response_model=list[schemmas.MessageOut])
@@ -79,7 +148,10 @@ def list_chats(
                 chat_id=other_id,
                 name=other_user.name if other_user else None,
                 avatar=other_user.avatar if other_user else None,
-                last_message=message.content,
+                last_message=(
+                    message.content
+                    or ("[Imagem]" if message.media_type == "image" else "[Audio]" if message.media_type == "audio" else "")
+                ),
                 last_message_at=message.created_at,
                 last_message_id=message.id,
                 last_message_sender_id=message.sender_id,
@@ -127,7 +199,10 @@ def list_chats(
                 chat_id=group_id,
                 name=group.name if group else None,
                 avatar=None,
-                last_message=message.content,
+                last_message=(
+                    message.content
+                    or ("[Imagem]" if message.media_type == "image" else "[Audio]" if message.media_type == "audio" else "")
+                ),
                 last_message_at=message.created_at,
                 last_message_id=message.id,
                 last_message_sender_id=message.sender_id,

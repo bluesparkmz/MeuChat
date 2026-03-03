@@ -66,6 +66,8 @@ class Message(Base):
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     receiver_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
+    media_url = Column(String(255), nullable=True)
+    media_type = Column(String(30), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")

@@ -44,9 +44,11 @@ class LoginRequest(BaseModel):
 
 
 class MessageCreate(BaseModel):
-    content: str
+    content: Optional[str] = None
     receiver_id: Optional[int] = None
     group_id: Optional[int] = None
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
 
 
 class MessageOut(BaseModel):
@@ -55,6 +57,8 @@ class MessageOut(BaseModel):
     sender_id: int
     receiver_id: Optional[int] = None
     group_id: Optional[int] = None
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -96,6 +100,8 @@ class WebSocketPayload(BaseModel):
     content: Optional[str] = None
     receiver_id: Optional[int] = None
     group_id: Optional[int] = None
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
     # Comentario: campos para sinalizacao WebRTC.
     sdp: Optional[dict] = None
     candidate: Optional[dict] = None

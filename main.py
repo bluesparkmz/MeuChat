@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from sqlalchemy import inspect, text
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,6 +48,15 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # Comentario: cria tabelas no startup (para prototipo).
 Base.metadata.create_all(bind=engine)
+
+# Comentario: patch leve de schema para ambientes existentes.
+inspector = inspect(engine)
+message_columns = {column["name"] for column in inspector.get_columns("messages")}
+with engine.begin() as conn:
+    if "media_url" not in message_columns:
+        conn.execute(text("ALTER TABLE messages ADD COLUMN media_url VARCHAR(255)"))
+    if "media_type" not in message_columns:
+        conn.execute(text("ALTER TABLE messages ADD COLUMN media_type VARCHAR(30)"))
 
 app.include_router(user_router)
 app.include_router(messages_router)

@@ -10,10 +10,12 @@ def create_message(
     message_in: schemmas.MessageCreate,
 ) -> models.Message:
     message = models.Message(
-        content=message_in.content,
+        content=message_in.content or "",
         sender_id=sender_id,
         receiver_id=message_in.receiver_id,
         group_id=message_in.group_id,
+        media_url=message_in.media_url,
+        media_type=message_in.media_type,
     )
     db.add(message)
     db.commit()
