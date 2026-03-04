@@ -94,7 +94,49 @@ def set_push_token(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    current_user.expo_push_token = payload.token or None
+    if payload.token:
+        push_device = None
+        if payload.device_id:
+            push_device = (
+                db.query(models.PushDevice)
+                .filter(
+                    models.PushDevice.user_id == current_user.id,
+                    models.PushDevice.device_id == payload.device_id,
+                )
+                .first()
+            )
+        if not push_device:
+            push_device = (
+                db.query(models.PushDevice)
+                .filter(
+                    models.PushDevice.user_id == current_user.id,
+                    models.PushDevice.token == payload.token,
+                )
+                .first()
+            )
+        if not push_device:
+            push_device = models.PushDevice(
+                user_id=current_user.id,
+                token=payload.token,
+                device_id=payload.device_id,
+                platform=payload.platform,
+                last_seen_at=datetime.utcnow(),
+            )
+            db.add(push_device)
+        else:
+            push_device.token = payload.token
+            push_device.device_id = payload.device_id or push_device.device_id
+            push_device.platform = payload.platform or push_device.platform
+            push_device.last_seen_at = datetime.utcnow()
+        # Compatibilidade com clientes antigos que leem um unico campo.
+        current_user.expo_push_token = payload.token
+    else:
+        delete_query = db.query(models.PushDevice).filter(models.PushDevice.user_id == current_user.id)
+        if payload.device_id:
+            delete_query = delete_query.filter(models.PushDevice.device_id == payload.device_id)
+        delete_query.delete(synchronize_session=False)
+        current_user.expo_push_token = None
+
     db.commit()
     db.refresh(current_user)
     return current_user

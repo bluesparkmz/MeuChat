@@ -7,7 +7,7 @@ import models
 from auth import get_current_user
 from controllers import message as message_controller
 from controllers.conection_manager import global_connection_manager
-from controllers.push_notifications import send_expo_push, is_expo_push_token
+from controllers.push_notifications import send_expo_push, get_user_push_tokens
 from controllers.storage_manager import storage_manager, MESSAGES_FOLDER
 from database import get_db
 
@@ -54,17 +54,14 @@ def _send_push_notifications(db: Session, message: models.Message) -> None:
 
     if message.receiver_id:
         receiver = db.query(models.User).filter(models.User.id == message.receiver_id).first()
-        if (
-            receiver
-            and is_expo_push_token(receiver.expo_push_token)
-            and not global_connection_manager.is_user_online(receiver.id)
-        ):
-            send_expo_push(
-                to_token=receiver.expo_push_token,  # type: ignore[arg-type]
-                title=sender_name,
-                body=body,
-                data={"chat_type": "direct", "chat_id": message.sender_id},
-            )
+        if receiver and not global_connection_manager.is_user_online(receiver.id):
+            for push_token in get_user_push_tokens(db, receiver.id, receiver.expo_push_token):
+                send_expo_push(
+                    to_token=push_token,
+                    title=sender_name,
+                    body=body,
+                    data={"chat_type": "direct", "chat_id": message.sender_id},
+                )
         return
 
     if message.group_id:
@@ -75,16 +72,17 @@ def _send_push_notifications(db: Session, message: models.Message) -> None:
         )
         for membership in memberships:
             user = db.query(models.User).filter(models.User.id == membership.user_id).first()
-            if not user or not is_expo_push_token(user.expo_push_token):
+            if not user:
                 continue
             if global_connection_manager.is_user_online(user.id):
                 continue
-            send_expo_push(
-                to_token=user.expo_push_token,  # type: ignore[arg-type]
-                title=sender_name,
-                body=body,
-                data={"chat_type": "group", "chat_id": message.group_id},
-            )
+            for push_token in get_user_push_tokens(db, user.id, user.expo_push_token):
+                send_expo_push(
+                    to_token=push_token,
+                    title=sender_name,
+                    body=body,
+                    data={"chat_type": "group", "chat_id": message.group_id},
+                )
 
 
 @router.post("/", response_model=schemmas.MessageOut, status_code=status.HTTP_201_CREATED)

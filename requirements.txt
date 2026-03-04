@@ -10,3 +10,4 @@ psycopg2-binary
 jinja2
 requests
 boto3
+alembic

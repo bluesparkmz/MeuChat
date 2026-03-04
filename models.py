@@ -29,6 +29,7 @@ class User(Base):
     groups_owned = relationship("Group", back_populates="owner")
     group_memberships = relationship("GroupMember", back_populates="user")
     message_reads = relationship("MessageRead", back_populates="user")
+    push_devices = relationship("PushDevice", back_populates="user")
 
 
 class Group(Base):
@@ -102,3 +103,20 @@ class PasswordResetOTP(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User")
+
+
+class PushDevice(Base):
+    __tablename__ = "push_devices"
+    __table_args__ = (
+        UniqueConstraint("user_id", "device_id", name="uq_push_device_user_device"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token = Column(String(255), nullable=False, unique=True, index=True)
+    device_id = Column(String(120), nullable=True)
+    platform = Column(String(20), nullable=True)
+    last_seen_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="push_devices")

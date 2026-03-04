@@ -137,3 +137,5 @@ class OTPVerify(BaseModel):
 
 class PushTokenIn(BaseModel):
     token: Optional[str] = None
+    device_id: Optional[str] = None
+    platform: Optional[str] = None

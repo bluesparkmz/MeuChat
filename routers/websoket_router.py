@@ -11,7 +11,7 @@ import models
 from auth import get_user_from_token
 from controllers.conection_manager import Connection, global_connection_manager
 from controllers import message as message_controller
-from controllers.push_notifications import is_expo_push_token, send_expo_push
+from controllers.push_notifications import get_user_push_tokens, send_expo_push
 from database import SessionLocal
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
@@ -152,17 +152,14 @@ async def chat_socket(websocket: WebSocket):
                     sender_name = user.name or "Novo contato"
                     if message.receiver_id:
                         receiver = db_msg.query(models.User).filter(models.User.id == message.receiver_id).first()
-                        if (
-                            receiver
-                            and is_expo_push_token(receiver.expo_push_token)
-                            and not global_connection_manager.is_user_online(receiver.id)
-                        ):
-                            send_expo_push(
-                                to_token=receiver.expo_push_token,  # type: ignore[arg-type]
-                                title=sender_name,
-                                body=_push_preview(message),
-                                data={"chat_type": "direct", "chat_id": message.sender_id},
-                            )
+                        if receiver and not global_connection_manager.is_user_online(receiver.id):
+                            for push_token in get_user_push_tokens(db_msg, receiver.id, receiver.expo_push_token):
+                                send_expo_push(
+                                    to_token=push_token,
+                                    title=sender_name,
+                                    body=_push_preview(message),
+                                    data={"chat_type": "direct", "chat_id": message.sender_id},
+                                )
                     elif message.group_id:
                         memberships = (
                             db_msg.query(models.GroupMember)
@@ -171,16 +168,17 @@ async def chat_socket(websocket: WebSocket):
                         )
                         for membership in memberships:
                             member_user = db_msg.query(models.User).filter(models.User.id == membership.user_id).first()
-                            if not member_user or not is_expo_push_token(member_user.expo_push_token):
+                            if not member_user:
                                 continue
                             if global_connection_manager.is_user_online(member_user.id):
                                 continue
-                            send_expo_push(
-                                to_token=member_user.expo_push_token,  # type: ignore[arg-type]
-                                title=sender_name,
-                                body=_push_preview(message),
-                                data={"chat_type": "group", "chat_id": message.group_id},
-                            )
+                            for push_token in get_user_push_tokens(db_msg, member_user.id, member_user.expo_push_token):
+                                send_expo_push(
+                                    to_token=push_token,
+                                    title=sender_name,
+                                    body=_push_preview(message),
+                                    data={"chat_type": "group", "chat_id": message.group_id},
+                                )
                 finally:
                     db_msg.close()
                 response = {
